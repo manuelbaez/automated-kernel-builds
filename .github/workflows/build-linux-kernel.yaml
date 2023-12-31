@@ -7,24 +7,28 @@ on:
         description: "Source Tar URL"
         required: true
         type: string
+      config_url:
+        description: "Config file URL"
+        required: true
+        type: string
       packaging:
         description: Packaging Method to Export
         required: true
         type: choice
         options:
-        - rpm-pkg            
-        - binrpm-pkg
+        # - rpm-pkg            
+        # - binrpm-pkg
         - deb-pkg
-        - bindeb-pkg
-        - snap-pkg
-        - tar-pkg
-        - targz-pkg
-        - tarbz2-pkg
+        # - bindeb-pkg
+        # - snap-pkg
+        # - tar-pkg
+        # - targz-pkg
+        # - tarbz2-pkg
         - tarxz-pkg
-        - perf-tar-src-pkg
-        - perf-targz-src-pkg
-        - perf-tarbz2-src-pkg
-        - perf-tarxz-src-pkg
+        # - perf-tar-src-pkg
+        # - perf-targz-src-pkg
+        # - perf-tarbz2-src-pkg
+        # - perf-tarxz-src-pkg
 
 jobs:
     build_and_package:
@@ -33,10 +37,29 @@ jobs:
         steps:
           - name: Checkout Repository
             uses: actions/checkout@v3
+        
+          - name: Install dependencies
+            run: sudo apt install $(echo $(cat ./kernel/packages.txt))
 
-          - name: Download Kernel Source
+          - name: Download and Extract Kernel Source
             run: |
-              axel -a -n 8 ${{inputs.tar_url}} --output=kernel_source &&\
+              wget ${{inputs.tar_url}} -O kernel_source &&\
               mkdir -p ./build/kernel &&\
+              mkdir -p ./build/out &&\
               tar -xf kernel_source -C ./build/kernel --strip-components=1
+              
+          - name: Build kernel
+            working-directory: ./build/kernel
+            run: |
+              wget ${{inputs.config_url}} -O ../out/.config &&\
+              make distclean &&\
+              make ${{inputs.packaging}} -j $(nproc) O=../out &&\
+              make distclean O=../out &&\
+              ls ../out
+
+          - name: Upload Artifact
+            uses: actions/upload-artifact@v4
+            with:
+              name: kernel_build_${{github.job_workflow_sha}}
+              path: ./build/out/*.tar.xz
 
